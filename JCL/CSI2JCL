@@ -1,0 +1,95 @@
+//CSI2JSON JOB (USERID),                                                        
+//             'CSI2JSON',                                                      
+//             USER=,                                         /*RACF*/          
+//             GROUP=,                                        /*RACF*/          
+//             PASSWORD=,                                     /*RACF*/          
+//             NOTIFY=&SYSUID,                                                  
+//             CLASS=A,                                                         
+//             MSGCLASS=A,                                                      
+//             MSGLEVEL=(1,1),                                                  
+//             REGION=0M                                                        
+//********************************************************************/         
+//*                             CSI2JSON                             */         
+//********************************************************************/         
+//*                                                                  */         
+//* READS THE CONTENT OF SUPPLIED CSI VSAM DATASET AND EXPORTS SMP/E */         
+//* ENTRIES INTO THE JSON FILE WHICH IS COMPATIBLE WITH THE IBM      */         
+//* PROACTIVE MAINTENANCE SERVICE PORTAL.                            */         
+//*                                                                  */         
+//* SCRIPT ALLOCATES TEMPOPARY WORKING DATASETS UNDER THE            */         
+//* %USERID%.CSI2JSON HLQ AND SCRATCHES THEM AFTER THE PROCESSING.   */         
+//*                                                                  */         
+//* JSON DATASET IS ALLOCATED UNDER THE FOLLOWING HLQ:               */         
+//*                                                                  */         
+//*   %USERID%.CSI2JSON.JSON                                         */         
+//*                                                                  */         
+//* IT IS POSSIBLE TO CHANGE THE JSON DATASET NAME BY SPECIFYING THE */         
+//* FOLLOWING SCRIPT ARGUMENT:                                       */         
+//*                                                                  */         
+//*   JSON_DSN=__DATASET_NAME__                                      */         
+//*                                                                  */         
+//* CSI2JSON DOES NOT SCRATCHES ANY EXISTED JSON OR TEMPORARY        */         
+//* WORKING DATASETS. IT MIGHT HAPPEN THAT USER HAD ALREADY RUN THE  */         
+//* SCRIPT AGAINST THE SAME CSI VSAM WHERE THE JSON/WORKING DATASETS */         
+//* IS ALREADY ALLOCATED ON THE DASD. THE SCRIPT WILL STOP IN THIS   */         
+//* CASE WITH RETURN CODE > 0.                                       */         
+//* THE SITUATION CAN BE EASILY ELIMINATED BY SPECIFUING             */         
+//*                                                                  */         
+//*   DELETE_EXISTING_DSN=[YES | NO]                                 */         
+//*                                                                  */         
+//* WHICH FORCE CSI2JSON TO DELETE EXISTING JSON/WORKING BEFORE      */         
+//* PROCESSING.                                                      */         
+//*                                                                  */         
+//* IT MIGHT BE USEFUL TO KEEP TEMPORAL WORKING DATASETS ON DASD     */         
+//* WHICH CAN BE DONE BY THE FOLLOWING ARGUMENT:                     */         
+//*                                                                  */         
+//*   KEEP_TEMPORARY_DSN=[YES | NO]                                  */         
+//*                                                                  */         
+//* USER CAN ALWAYS REQUEST THE SCRIPT TRACING BY SETTING THE        */         
+//* FOLLOWING PARAMETER:                                             */         
+//*                                                                  */         
+//*   TRACE=[ON | OFF]                                               */         
+//*                                                                  */         
+//* PLEASE TAKE INTO YOUR ATTENTION THAT ENABLING TRACE GENERATES    */         
+//* A LOT OF OUTPUT AND REQUIRES HUGE AMOUNT OF DASD SPACE FOR       */         
+//* SYSTSPRT DATASET IF THE SCRIPT IS RUN IN BATCH MODE.             */         
+//*                                                                  */         
+//*                                                                  */         
+//* KNOW ISSUES:                                                     */         
+//*                                                                  */         
+//*   ISSUE    : THE FOLLOWING ERROR MESSAGE APPEARS IN THE SCRIPT   */         
+//*              OUTPUT:                                             */         
+//*                                                                  */         
+//*                                                                  */         
+//*   ERROR: RETURN CODE 16 WHILE RUNNING GIMSMP APPLICATION.        */         
+//*          PROCESSING TERMINATED.                                  */         
+//*                                                                  */         
+//*          REVIEW SMP/E LOG DATASET FOR MORE INFORMATION.          */         
+//*                                                                  */         
+//*          CSI2JSON IS EXITING DUE TO ERROR.                       */         
+//*                                                                  */         
+//*                                                                  */         
+//*   CAUSE    : SMP/E GIMSMP APPLICATION FAILED WITH SPECIFIED      */         
+//*              RETURN CODE.                                        */         
+//*                                                                  */         
+//*   SOLUTION : CHECK %USERID%.CSI2JSON.SMP* DATASETS FOR THE ERROR */         
+//*              MESSAGE DESCRIPTION.                                */         
+//*                                                                  */         
+//********************************************************************/         
+//RUNPROG  EXEC PGM=IKJEFT01,DYNAMNBR=20                                        
+//SYSEXEC  DD DISP=SHR,DSN=%CSI2REXX_DATASET_NAME%                              
+//SYSTSPRT DD SYSOUT=*                                                          
+//*SYSTSPRT DD DSN=%SYSTSPRT_DATADSET_NAME%,                                    
+//*            DISP=(NEW,CATLG),                                                
+//*            SPACE=(CYL,(10,10),RLSE),                                        
+//*            RECFM=VB,LRECL=240,BLKSIZE=24000,UNIT=3390                       
+//SYSTSIN  DD *                                                                 
+  CSI2JSON %CSI_VSAM_DATASET%                     -                             
+           DELETE_EXISTING_DSN=[YES | NO]         -                             
+           KEEP_TEMPORARY_DSN=[YES | NO]          -                             
+           JSON_DSN=%JSON_DATASET_NAME%                                         
+  CSI2JSON %CSI_VSAM_DATASET%                     -                             
+           DELETE_EXISTING_DSN=[YES | NO]         -                             
+           KEEP_TEMPORARY_DSN=[YES | NO]          -                             
+           JSON_DSN=%JSON_DATASET_NAME%                                         
+/*                                                                              
