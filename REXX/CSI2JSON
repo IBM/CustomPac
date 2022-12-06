@@ -16,7 +16,7 @@
 /**********************************************************************/
 /* Name       : CSI2JSON                                              */
 /*                                                                    */
-/* Description: Exports CSI into the JSON file which can be imported  */
+/* Description: Exports CSI into the JSON file which can be imported. */
 /*              IBM Proactive Maintenance Service Portal.             */
 /*                                                                    */
 /* Function   : Reads the content of supplied CSI VSAM dataset and    */
@@ -27,41 +27,53 @@
 /*              %USERID%.CSI2JSON HLQ and scratches them after the    */
 /*              processing.                                           */
 /*                                                                    */
+/*            JSON_DSN=dataset_name                                   */
+/*              ---------------------                                 */
 /*              JSON dataset is allocated under the following HLQ:    */
-/*                                                                    */
-/*                %USERID%.CSI2JSON.JSON                              */
-/*                                                                    */
+/*                %USERID%.CSI2JSON.JSON (Default)                    */
 /*              It is possible to change the JSON dataset name by     */
-/*              specifying the following script argument:             */
+/*              specifying this script argument                       */
+/*              example: JSON_DSN=<hlq>.<mlq>.<llq>                   */
 /*                                                                    */
-/*                JSON_DSN=dataset_name                               */
-/*                                                                    */
-/*              CSI2JSON does not scratches any existed JSON or       */
+/*            DELETE_EXISTING_DSN=[YES | NO]                          */
+/*              -------------------------------                       */
+/*              CSI2JSON does not scratch any existed JSON or         */
 /*              temporary working datasets. It might happen that user */
 /*              had already run the script against the same CSI VSAM  */
 /*              where the JSON/working datasets is already existed on */
 /*              the DASD. The script will stop in this case with      */
 /*              return code > 0. The situation can be easily          */
-/*              eliminated by specifying                              */
-/*                                                                    */
-/*                DELETE_EXISTING_DSN=[YES | NO]                      */
-/*                                                                    */
-/*              which force CSI2JSON to delete existing JSON/working  */
+/*              eliminated by specifying  DELETE_EXISTING_DSN=YES     */
+/*              which forces CSI2JSON to delete existing JSON/working */
 /*              before processing.                                    */
+/*              Example: DELETE_EXISTING_DSN=YES                      */
 /*                                                                    */
+/*            KEEP_TEMPORARY_DSN=[YES | NO]                           */
+/*            -----------------------------                           */
 /*              It might be useful to keep temporal working datasets  */
-/*              on DASD which can be done by the following argument:  */
+/*              on DASD which can be done by coding this argument.    */
+/*              Example: KEEP_TEMPORARY_DSN=YES                       */
 /*                                                                    */
-/*                KEEP_TEMPORARY_DSN=[YES | NO]                       */
+/*            MAX_LIST_RC=nn                                          */
+/*              ----------------                                      */
+/*              User can bypass a return code greater than 0 by       */
+/*              this parameter                                        */
+/*              Sometimes the SMP/E list utility will result in a     */
+/*              return code greater than 0 but can be safely bypassed.*/
+/*              The parameter above will permit the user to enter     */
+/*              the max return code they wull accepy bu replacing the */
+/*              nn with a numeric value.                              */
+/*              Example:  MAX_LIST_RC=04                              */
 /*                                                                    */
+/*                                                                    */
+/*            TRACE=[ON | OFF]                                        */
+/*              -----------------                                     */
 /*              User can always request the script tracing by setting */
-/*                                                                    */
-/*                TRACE=[ON | OFF]                                    */
-/*                                                                    */
 /*              argument. Please take into your attention that        */
 /*              enabling trace generates a lot of output and requires */
 /*              huge amount of DASD space of SYSTSPRT dataset if the  */
 /*              script is run in batch mode.                          */
+/*              Example: TRACE=ON                                     */
 /*                                                                    */
 /* Know issues:                                                       */
 /*                                                                    */
@@ -71,11 +83,8 @@
 /*                                                                    */
 /*   ERROR: RETURN CODE 16 WHILE RUNNING GIMSMP APPLICATION.          */
 /*          PROCESSING TERMINATED.                                    */
-/*                                                                    */
 /*          REVIEW SMP/E LOG DATASET FOR MORE INFORMATION.            */
-/*                                                                    */
 /*          CSI2JSON IS EXITING DUE TO ERROR.                         */
-/*                                                                    */
 /*                                                                    */
 /*   Cause    : SMP/E GIMSMP application failed with specified return */
 /*              code.                                                 */
@@ -105,7 +114,7 @@ parse upper arg args
 /* Initialize set of variables which will be used further in the      */
 /* script.                                                            */
 /**********************************************************************/
-c2j.script.version = "1.0.0"           /* Script version              */
+c2j.script.version = "1.0.1"           /* Script version              */
 c2j.script.trace   = "OFF"             /* Trace flag                  */
 /**********************************************************************/
 /* Specify HIGH-LEVEL and MID-LEVEL qualifiers.                       */
@@ -237,6 +246,8 @@ c2j.GLOBAL.feature.0 = 0
 /**********************************************************************/
 c2j.GLOBAL.sysmods.0 = 0
 
+C2J.RETCODE.MAX_LIST_RC = 0                     /* ADDED CS05542 2207 */
+
 ret = 0
 
 /**********************************************************************/
@@ -315,6 +326,20 @@ Do While rest \= ''
    If lvalue = 'TRACE' Then
       If rvalue = 'ON' Then
          c2j.script.trace = 'ON'
+ /*------------------------------------------------------------------*/
+ /*                                                                  */
+ /* Added to allow bypass retcode for SMPE list                      */
+ /*                                                         CS05542  */
+ /*------------------------------------------------------------------*/
+
+   IF LVALUE = 'MAX_LIST_RC' THEN          /* Look for option        */
+      IF rvalue > 0 Then                   /* is value entered?      */
+         C2J.RETCODE.MAX_LIST_RC = RVALUE  /* yes. set new max retcod*/
+ /*------------------------------------------------------------------*/
+ /*                                                                  */
+ /* End of Mod                                                       */
+ /*                                                         CS05542  */
+ /*------------------------------------------------------------------*/
 End
 
 Say DATE('N') TIME('N') 'Processing args: KEEP_TEMPORARY_DSN=' ||,
@@ -1961,7 +1986,7 @@ Return
 /*                                                                    */
 /* Description : Terminates REXX script                               */
 /*                                                                    */
-/* Function    : Flush buffers to disk and free any holded resources. */
+/* Function    : Flush buffers to disk and free any held resources.   */
 /*                                                                    */
 /* Input Parameters:                                                  */
 /*                                                                    */
@@ -1979,6 +2004,10 @@ Return
 Terminate:
 Parse Arg ret
 Say DATE('N') TIME('N') 'Terminating CSI2JSON REXX, RC='ret
+
+If ret \= 0 Then
+   Call DEALLOC_ALL
+
 Exit ret
 
 /**********************************************************************/
@@ -7072,28 +7101,35 @@ End
 
 /* Run SMP/E LIST command */
 ADDRESS TSO 'CALL *(GIMSMP)'
-If rc \= 0 Then Do
+         /* If rc \= 0 Then Do  grh 22/07 */
+ /*------------------------------------------------------------------*/
+ /*                                                                  */
+ /* The following code will permit a user specified non zero         */
+ /* return code for the SMPE list                                    */
+ /*                                                         CS05542  */
+ /*------------------------------------------------------------------*/
+IF RC > C2J.RETCODE.MAX_LIST_RC THEN DO /* > THAN ACCEPTABLE RETCODE */
    Say ' '
    Say ' ERROR: RETURN CODE' rc 'WHILE RUNNING GIMSMP APPLICATION.'
+   Say '        FOR ZONE '||ZONE
    Say '        PROCESSING TERMINATED.'
    Say ' '
    Say '        REVIEW SMP/E LOG DATASET FOR MORE INFORMATION.'
    Say ' '
    Say '        CSI2JSON IS EXITING DUE TO ERROR.'
-   Call Terminate 8
+   Call Terminate RC
 End
 
+ /*------------------------------------------------------------------*/
+ /*                                                                  */
+ /* End Of Mod                                                       */
+ /*                                                         CS05542  */
+ /*------------------------------------------------------------------*/
 /* Read SMPLIST for further processing */
 DROP c2j.smplist.line.
 ADDRESS TSO 'EXECIO * DISKR SMPLIST (FINIS STEM c2j.smplist.line.'
 
-Call DEALLOC 'SMPCSI'
-Call DEALLOC 'SMPCNTL'
-Call DEALLOC 'SMPLOG'
-Call DEALLOC 'SMPLOGA'
-Call DEALLOC 'SMPOUT'
-Call DEALLOC 'SMPRPT'
-Call DEALLOC 'SMPLIST'
+Call DEALLOC_ALL
 
 If c2j.smplist.keepdsn = 'NO' Then Do
    Call DELETE "'"c2j.zone.smpcntl"'"
@@ -7186,12 +7222,25 @@ If ret \= 0 Then Do
    Say "             ATTEMPTING TO DEALLOCATE DD"
    Say " "
    Say "            "dd
-   Say " "
-   Say "             CSI2JSON IS EXITING DUE TO ERROR WHILE"
-   Say "             DEALLOCATING SPECIFIED DATA SET."
-   Call Terminate ret
 End
 Return ret
+
+/**********************************************************************/
+/* DEALLOC_ALL                                                        */
+/*                                                                    */
+/* Description: FREE ALL DD names.                                    */
+/*                                                                    */
+/**********************************************************************/
+DEALLOC_ALL:
+Call DEALLOC 'SMPCSI'
+Call DEALLOC 'SMPCNTL'
+Call DEALLOC 'SMPLOG'
+Call DEALLOC 'SMPLOGA'
+Call DEALLOC 'SMPOUT'
+Call DEALLOC 'SMPRPT'
+Call DEALLOC 'SMPLIST'
+Return 0
+
 
 /**********************************************************************/
 /* DELETE                                                             */
